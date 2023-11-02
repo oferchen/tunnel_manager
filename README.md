@@ -1,8 +1,8 @@
-# VXLAN Management Script
+# VXLAN Management
 
 ## Description
 
-The VXLAN Management Script is a Python script that allows you to create and manage VXLAN tunnels between two network bridges. It simplifies the process of setting up VXLAN tunnels for virtual network overlays.
+The VXLAN Management is a Python script that allows you to create and manage VXLAN tunnels between two network bridges. It simplifies the process of setting up VXLAN tunnels for virtual network overlays.
 
 ## Features
 
