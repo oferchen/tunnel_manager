@@ -43,8 +43,10 @@ python vxlan_manager.py [OPTIONS]
 * --bridge-name BRIDGE_NAME: Bridge name to add VXLAN interface (required).
 * --src-port SRC_PORT: Source VXLAN UDP port (default: 4789).
 * --dst-port DST_PORT: Destination VXLAN UDP port (default: 4789).
+* --dev NETWORK_DEVICE: Network device to utilize (default: eth0).
 * --cleanup: Remove VXLAN tunnel instead of creating it (optional).
 * --validate-connectivity: Perform post-deployment connectivity validation (optional).
+* --bridge-tool TOOL: Bridge management tool to use either ip or brctl (default: ip).
 
 #### Examples
 * Create a VXLAN tunnel:
