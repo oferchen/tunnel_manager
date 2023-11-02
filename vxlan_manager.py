@@ -9,8 +9,8 @@ import subprocess
 import sys
 from xml.etree import ElementTree
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging with timestamps
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 class VXLANManagerError(Exception):
@@ -33,7 +33,7 @@ class VXLANManager:
                             'local', src_host,
                             'remote', dst_host,
                             'dev', dev,
-                            'dstport', str(src_port)], check=True)
+                            'dstport', str(dst_port)], check=True)
             subprocess.run(['ip', 'link', 'set', f'vxlan{vni}', 'up'], check=True)
             subprocess.run(['ip', 'link', 'set', 'master', bridge_name, f'vxlan{vni}'], check=True)
         except subprocess.CalledProcessError as e:
@@ -52,17 +52,23 @@ class VXLANManager:
             logger.error(f'Error deleting VXLAN interface for VNI {vni}: {e}')
             raise VXLANManagerError(f'Error deleting VXLAN interface for VNI {vni}') from e
 
-    def validate_connectivity(self, src_host, dst_host, vni, port=None, timeout=3):
+    def validate_connectivity(self, src_host, dst_host, vni, port=None, timeout=3, max_retries=3):
         port = port or self.default_src_port
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(timeout)
+        retries = 0
+        while retries < max_retries:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(timeout)
 
-            try:
-                s.connect((dst_host, port))
-                logger.info(f'Connectivity to VXLAN VNI {vni} at {dst_host}:{port} from {src_host} is successful.')
-            except socket.error as e:
-                logger.error(f'Failed to establish connectivity to VXLAN VNI {vni} at {dst_host}:{port} from {src_host}: {e}')
-                raise VXLANManagerError(f'Failed to establish connectivity to VXLAN VNI {vni} at {dst_host}:{port} from {src_host}') from e
+                try:
+                    s.connect((dst_host, port))
+                    logger.info(f'Connectivity to VXLAN VNI {vni} at {dst_host}:{port} from {src_host} is successful.')
+                    return
+                except socket.error as e:
+                    retries += 1
+                    logger.warning(f'Retry {retries}/{max_retries} - Failed to establish connectivity to VXLAN VNI {vni} at {dst_host}:{port} from {src_host}: {e}')
+                    if retries == max_retries:
+                        logger.error(f'Failed to establish connectivity to VXLAN VNI {vni} at {dst_host}:{port} from {src_host} after {max_retries} attempts.')
+                        raise VXLANManagerError(f'Failed to establish connectivity to VXLAN VNI {vni} at {dst_host}:{port} from {src_host}') from e
 
     def list_vxlan_interfaces(self, fields, output_format):
         result = subprocess.run(['ip', '-d', 'link', 'show', 'type', 'vxlan'], stdout=subprocess.PIPE, text=True)
@@ -89,68 +95,52 @@ class OutputFormatter:
         elif format_type == 'xml':
             root = ElementTree.Element('VXLANInterfaces')
             for item in data:
-                interface_element = ElementTree.SubElement(root, 'Interface')
+                entry = ElementTree.SubElement(root, 'VXLANInterface')
                 for key, value in item.items():
-                    element = ElementTree.SubElement(interface_element, key)
-                    element.text = str(value)
+                    element = ElementTree.SubElement(entry, key)
+                    element.text = value
             return ElementTree.tostring(root, encoding='unicode')
         elif format_type == 'csv':
-            if not data:
-                return ""
-            csv_output = io.StringIO()
-            writer = csv.DictWriter(csv_output, fieldnames=data[0].keys())
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=data[0].keys())
             writer.writeheader()
             writer.writerows(data)
-            return csv_output.getvalue()
-        elif format_type == 'script':
-            return ', '.join([': '.join([key, str(val)]) for item in data for key, val in item.items()])
-        elif format_type == 'table':
-            table = str()
-            headers = data[0].keys() if data else []
-            table += ' | '.join(headers) + '\n'
-            table += '-+-'.join(['-' * len(header) for header in headers]) + '\n'
-            for item in data:
-                table += ' | '.join(item.values()) + '\n'
-            return table
+            return output.getvalue()
+        else:  # default to 'table'
+            headers = data[0].keys()
+            rows = [x.values() for x in data]
+            return '\n'.join(['\t'.join(headers)] + ['\t'.join(map(str, row)) for row in rows])
 
 def main():
-    parser = argparse.ArgumentParser(description='Manage VXLAN tunnels between bridges.')
-    parser.add_argument('--vni', type=int, help='VXLAN VNI')
-    parser.add_argument('--src-host', help='Source host IP')
-    parser.add_argument('--dst-host', help='Destination host IP')
-    parser.add_argument('--bridge-name', help='Bridge name to add VXLAN interface')
-    parser.add_argument('--src-port', type=int, help='Source VXLAN UDP port')
-    parser.add_argument('--dst-port', type=int, help='Destination VXLAN UDP port')
-    parser.add_argument('--dev', default='eth0', help='Network device (default: eth0)')
-    parser.add_argument('--cleanup', action='store_true', help='Remove VXLAN tunnel instead of creating it')
-    parser.add_argument('--validate-connectivity', action='store_true', help='Perform post-deployment connectivity validation')
-    parser.add_argument('--list', action='store_true', help='List VXLAN interfaces')
-    parser.add_argument('-fi', '--fields', nargs='+', default='all', help='Fields to include when listing VXLAN interfaces')
-    parser.add_argument('-fo', '--format', choices=['script', 'json', 'xml', 'csv', 'table'], default='table', help='Output format when listing VXLAN interfaces')
-    parser.add_argument('--bridge-tool', choices=['ip', 'brctl'], default='ip', help='Bridge management tool to use (default: ip)')
+    parser = argparse.ArgumentParser(description='Manage VXLAN interfaces.')
+    parser.add_argument('action', choices=['create', 'delete', 'validate', 'list'], help='Action to perform')
+    parser.add_argument('--vni', type=int, help='VNI for the VXLAN interface')
+    parser.add_argument('--src_host', help='Source host IP address')
+    parser.add_argument('--dst_host', help='Destination host IP address')
+    parser.add_argument('--bridge_name', help='Name of the bridge to attach the VXLAN interface to')
+    parser.add_argument('--src_port', type=int, default=4789, help='Source port (default: 4789)')
+    parser.add_argument('--dst_port', type=int, default=4789, help='Destination port (default: 4789)')
+    parser.add_argument('--dev', default='eth0', help='Physical device to bind to (default: eth0)')
+    parser.add_argument('--fields', default='all', nargs='+', help='Fields to display when listing interfaces')
+    parser.add_argument('--output_format', default='table', choices=['json', 'xml', 'csv', 'table'],
+                        help='Output format for listing interfaces')
+    parser.add_argument('--timeout', type=int, default=3, help='Timeout in seconds for validating connectivity')
+    parser.add_argument('--max_retries', type=int, default=3, help='Maximum number of retries for validating connectivity')
     args = parser.parse_args()
 
-    vxlan_manager = VXLANManager(bridge_tool=args.bridge_tool)
+    vxlan_manager = VXLANManager()
 
-    try:
-        if args.cleanup:
-            if not args.vni or not args.bridge_name:
-                parser.error('--vni and --bridge-name are required for cleanup.')
-            vxlan_manager.cleanup_vxlan_interface(args.vni, args.bridge_name)
-        elif args.validate_connectivity:
-            if not all([args.src_host, args.dst_host, args.vni]):
-                parser.error('--src-host, --dst-host, and --vni are required for connectivity validation.')
-            vxlan_manager.validate_connectivity(args.src_host, args.dst_host, args.vni, port=args.src_port)
-        elif args.list:
-            print(vxlan_manager.list_vxlan_interfaces(args.fields, args.format))
-        else:
-            if not all([args.vni, args.src_host, args.dst_host, args.bridge_name]):
-                parser.error('--vni, --src-host, --dst-host, and --bridge-name are required to create VXLAN tunnel.')
-            vxlan_manager.create_vxlan_interface(args.vni, args.src_host, args.dst_host, args.bridge_name,
-                                                 src_port=args.src_port, dst_port=args.dst_port, dev=args.dev)
-    except VXLANManagerError as e:
-        logger.error(e)
-        sys.exit(1)
+    if args.action == 'create':
+        vxlan_manager.create_vxlan_interface(args.vni, args.src_host, args.dst_host, args.bridge_name,
+                                             args.src_port, args.dst_port, args.dev)
+    elif args.action == 'delete':
+        vxlan_manager.cleanup_vxlan_interface(args.vni, args.bridge_name)
+    elif args.action == 'validate':
+        vxlan_manager.validate_connectivity(args.src_host, args.dst_host, args.vni, args.src_port,
+                                            args.timeout, args.max_retries)
+    elif args.action == 'list':
+        output = vxlan_manager.list_vxlan_interfaces(args.fields, args.output_format)
+        print(output)
 
 if __name__ == '__main__':
     main()
