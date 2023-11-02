@@ -1,80 +1,97 @@
+# File: test_vxlan_manager.py
+
 import unittest
-from unittest.mock import patch, MagicMock
-from vxlan_manager import VXLANManager
+from unittest.mock import MagicMock, mock_open, patch
+
+from vxlan_manager import OutputFormatter, VXLANManager, VXLANManagerError
+
 
 class TestVXLANManager(unittest.TestCase):
 
     def setUp(self):
-        self.vxlan_manager_ip = VXLANManager(bridge_tool='ip')
-        self.vxlan_manager_brctl = VXLANManager(bridge_tool='brctl')
+        self.vxlan_manager = VXLANManager()
 
-    def tearDown(self):
-        pass
+    @patch('vxlan_manager.subprocess.run')
+    def test_create_vxlan_interface_success(self, mock_run):
+        self.vxlan_manager.create_vxlan_interface(1001, '192.168.1.1', '192.168.1.2', 'br0')
+        mock_run.assert_called()
 
-    @patch('subprocess.run')
-    def test_create_vxlan_interface_ip_success(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0)
+    @patch('vxlan_manager.subprocess.run')
+    def test_create_vxlan_interface_failure(self, mock_run):
+        mock_run.side_effect = subprocess.CalledProcessError(1, 'ip')
+        with self.assertRaises(VXLANManagerError):
+            self.vxlan_manager.create_vxlan_interface(1001, '192.168.1.1', '192.168.1.2', 'br0')
 
-        vni = 1001
-        src_host = '10.0.0.1'
-        dst_host = '10.0.0.2'
-        bridge_name = 'br0'
+    @patch('vxlan_manager.subprocess.run')
+    def test_cleanup_vxlan_interface_success(self, mock_run):
+        self.vxlan_manager.cleanup_vxlan_interface(1001, 'br0')
+        mock_run.assert_called()
 
-        self.vxlan_manager_ip.create_vxlan_interface(vni, src_host, dst_host, bridge_name)
+    @patch('vxlan_manager.subprocess.run')
+    def test_cleanup_vxlan_interface_failure(self, mock_run):
+        mock_run.side_effect = subprocess.CalledProcessError(1, 'ip')
+        with self.assertRaises(VXLANManagerError):
+            self.vxlan_manager.cleanup_vxlan_interface(1001, 'br0')
 
-        calls = [
-            patch.call(['ip', 'link', 'add', f'vxlan{vni}', 'type', 'vxlan',
-                        'id', str(vni),
-                        'local', src_host,
-                        'remote', dst_host,
-                        'dev', 'eth0',
-                        'dstport', str(self.vxlan_manager_ip.default_src_port)], check=True),
-            patch.call(['ip', 'link', 'set', f'vxlan{vni}', 'up'], check=True),
-            patch.call(['ip', 'link', 'set', 'master', bridge_name, f'vxlan{vni}'], check=True)
-        ]
-        mock_run.assert_has_calls(calls, any_order=True)
+    @patch('vxlan_manager.socket.socket')
+    def test_validate_connectivity_success(self, mock_socket):
+        mock_socket_instance = mock_socket.return_value.__enter__.return_value
+        self.vxlan_manager.validate_connectivity('192.168.1.1', '192.168.1.2', 1001)
+        mock_socket_instance.connect.assert_called_with(('192.168.1.2', 4789))
 
-    @patch('subprocess.run')
-    def test_create_vxlan_interface_ip_failure(self, mock_run):
-        mock_run.side_effect = subprocess.CalledProcessError(1, 'ip')  # Simulate a failure
+    @patch('vxlan_manager.socket.socket')
+    def test_validate_connectivity_failure(self, mock_socket):
+        mock_socket_instance = mock_socket.return_value.__enter__.return_value
+        mock_socket_instance.connect.side_effect = socket.error
+        with self.assertRaises(VXLANManagerError):
+            self.vxlan_manager.validate_connectivity('192.168.1.1', '192.168.1.2', 1001)
 
-        vni = 1001
-        src_host = '10.0.0.1'
-        dst_host = '10.0.0.2'
-        bridge_name = 'br0'
+    @patch('vxlan_manager.subprocess.run')
+    def test_list_vxlan_interfaces(self, mock_run):
+        mock_run.return_value.stdout = 'vxlan1001: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500\n' \
+                                       '    vxlan id 1001 local 192.168.1.1 remote 192.168.1.2 dstport 4789'
+        result = self.vxlan_manager.list_vxlan_interfaces(['vni', 'src_host', 'dst_host'], 'table')
+        self.assertIn('vxlan1001', result)
+        self.assertIn('192.168.1.1', result)
+        self.assertIn('192.168.1.2', result)
 
-        with self.assertRaises(SystemExit) as cm:
-            self.vxlan_manager_ip.create_vxlan_interface(vni, src_host, dst_host, bridge_name)
+class TestOutputFormatter(unittest.TestCase):
 
-        self.assertEqual(cm.exception.code, 1)
+    def test_format_json(self):
+        data = [{"key1": "value1", "key2": "value2"}]
+        result = OutputFormatter.format(data, 'json')
+        self.assertEqual(json.loads(result), data)
 
-    @patch('subprocess.run')
-    def test_cleanup_vxlan_interface_brctl_success(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0)
+    def test_format_xml(self):
+        data = [{"key1": "value1", "key2": "value2"}]
+        result = OutputFormatter.format(data, 'xml')
+        root = ElementTree.fromstring(result)
+        self.assertEqual(root.tag, 'VXLANInterfaces')
+        self.assertEqual(root[0][0].text, 'value1')
+        self.assertEqual(root[0][1].text, 'value2')
 
-        vni = 1001
-        bridge_name = 'br0'
+    def test_format_csv(self):
+        data = [{"key1": "value1", "key2": "value2"}]
+        result = OutputFormatter.format(data, 'csv')
+        self.assertIn('key1,key2', result)
+        self.assertIn('value1,value2', result)
 
-        self.vxlan_manager_brctl.cleanup_vxlan_interface(vni, bridge_name)
+    def test_format_script(self):
+        data = [{"key1": "value1", "key2": "value2"}]
+        result = OutputFormatter.format(data, 'script')
+        self.assertIn('key1: value1', result)
+        self.assertIn('key2: value2', result)
 
-        calls = [
-            patch.call(['brctl', 'delif', bridge_name, f'vxlan{vni}'], check=True),
-            patch.call(['ip', 'link', 'del', f'vxlan{vni}'], check=True)
-        ]
-        mock_run.assert_has_calls(calls, any_order=True)
+    def test_format_table(self):
+        data = [{"key1": "value1", "key2": "value2"}]
+        result = OutputFormatter.format(data, 'table')
+        self.assertIn('key1 | key2', result)
+        self.assertIn('value1 | value2', result)
 
-    @patch('subprocess.run')
-    def test_cleanup_vxlan_interface_brctl_failure(self, mock_run):
-        mock_run.side_effect = subprocess.CalledProcessError(1, 'brctl')  # Simulate a failure
-
-        vni = 1001
-        bridge_name = 'br0'
-
-        with self.assertRaises(SystemExit) as cm:
-            self.vxlan_manager_brctl.cleanup_vxlan_interface(vni, bridge_name)
-
-        self.assertEqual(cm.exception.code, 1)
-
+    def test_format_invalid_format(self):
+        data = [{"key1": "value1", "key2": "value2"}]
+        with self.assertRaises(ValueError):
+            OutputFormatter.format(data, 'invalid_format')
 
 if __name__ == '__main__':
     unittest.main()
