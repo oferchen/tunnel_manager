@@ -1,52 +1,60 @@
+import socket
 import unittest
-from mock import patch, MagicMock
-from vxlan_manager import VXLANManager
+
+import mock
+
+from vxlan_manager import VXLANManager, VXLANManagerError
+
 
 class TestVXLANManager(unittest.TestCase):
-
     def setUp(self):
-        self.vxlan_manager_ip = VXLANManager(bridge_tool='ip')
-        self.vxlan_manager_brctl = VXLANManager(bridge_tool='brctl')
+        self.vxlan_manager = VXLANManager()
+        self.vni = 1001
+        self.src_host = '192.168.1.1'
+        self.dst_host = '192.168.1.2'
+        self.bridge_name = 'br0'
+        self.src_port = 1234
+        self.dst_port = 5678
+        self.dev = 'eth0'
 
-    def tearDown(self):
-        pass
+    @mock.patch('subprocess.check_call')
+    def test_create_vxlan_interface(self, mock_check_call):
+        self.vxlan_manager.create_vxlan_interface(self.vni, self.src_host, self.dst_host, self.bridge_name, self.src_port, self.dst_port, self.dev)
+        mock_check_call.assert_has_calls([
+            mock.call(['ip', 'link', 'add', 'vxlan{0}'.format(self.vni), 'type', 'vxlan', 'id', str(self.vni),
+                       'local', self.src_host, 'remote', self.dst_host, 'dev', self.dev, 'dstport', str(self.dst_port)]),
+            mock.call(['ip', 'link', 'set', 'vxlan{0}'.format(self.vni), 'up']),
+            mock.call(['ip', 'link', 'set', 'master', self.bridge_name, 'vxlan{0}'.format(self.vni)])
+        ])
 
-    @patch('subprocess.check_call')
-    def test_create_vxlan_interface_ip_success(self, mock_check_call):
-        mock_check_call.return_value = 0
+    @mock.patch('subprocess.check_call')
+    def test_cleanup_vxlan_interface(self, mock_check_call):
+        self.vxlan_manager.cleanup_vxlan_interface(self.vni, self.bridge_name)
+        mock_check_call.assert_has_calls([
+            mock.call(['ip', 'link', 'set', 'vxlan{0}'.format(self.vni), 'nomaster']),
+            mock.call(['ip', 'link', 'del', 'vxlan{0}'.format(self.vni)])
+        ])
 
-        vni = 1001
-        src_host = '10.0.0.1'
-        dst_host = '10.0.0.2'
-        bridge_name = 'br0'
+    @mock.patch('socket.socket')
+    def test_validate_connectivity_success(self, mock_socket):
+        mock_socket_instance = mock_socket.return_value.__enter__.return_value
+        mock_socket_instance.connect.return_value = None
+        self.vxlan_manager.validate_connectivity(self.src_host, self.dst_host, self.vni, self.dst_port)
+        mock_socket_instance.connect.assert_called_once_with((self.dst_host, self.dst_port))
 
-        self.vxlan_manager_ip.create_vxlan_interface(vni, src_host, dst_host, bridge_name)
+    @mock.patch('socket.socket')
+    def test_validate_connectivity_failure(self, mock_socket):
+        mock_socket_instance = mock_socket.return_value.__enter__.return_value
+        mock_socket_instance.connect.side_effect = socket.error
+        with self.assertRaises(VXLANManagerError):
+            self.vxlan_manager.validate_connectivity(self.src_host, self.dst_host, self.vni, self.dst_port)
+        mock_socket_instance.connect.assert_called_once_with((self.dst_host, self.dst_port))
 
-        calls = [
-            patch.call(['ip', 'link', 'add', 'vxlan{vni}'.format(vni=vni), 'type', 'vxlan',
-                        'id', str(vni),
-                        'local', src_host,
-                        'remote', dst_host,
-                        'dev', 'eth0',
-                        'dstport', str(self.vxlan_manager_ip.default_src_port)]),
-            patch.call(['ip', 'link', 'set', 'vxlan{vni}'.format(vni=vni), 'up']),
-            patch.call(['ip', 'link', 'set', 'master', bridge_name, 'vxlan{vni}'.format(vni=vni)])
-        ]
-        mock_check_call.assert_has_calls(calls, any_order=True)
-
-    @patch('subprocess.check_call')
-    def test_create_vxlan_interface_ip_failure(self, mock_check_call):
-        mock_check_call.side_effect = subprocess.CalledProcessError(1, 'ip')  # Simulate a failure
-
-        vni = 1001
-        src_host = '10.0.0.1'
-        dst_host = '10.0.0.2'
-        bridge_name = 'br0'
-
-        with self.assertRaisesRegexp(SystemExit, '1'):
-            self.vxlan_manager_ip.create_vxlan_interface(vni, src_host, dst_host, bridge_name)
-
-    # Update additional test cases similarly for Python 2.7
+    @mock.patch('subprocess.check_output')
+    def test_list_vxlan_interfaces(self, mock_check_output):
+        mock_check_output.return_value = 'vxlan{0}:'.format(self.vni)
+        output = self.vxlan_manager.list_vxlan_interfaces(['vni'], 'script')
+        self.assertIn('vxlan{0}'.format(self.vni), output)
 
 if __name__ == '__main__':
     unittest.main()
