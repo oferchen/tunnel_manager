@@ -1,68 +1,67 @@
-# VXLAN Management
+# Tunnel Manager
 
-## Description
-
-The VXLAN Management is a Python script that allows you to create and manage VXLAN tunnels between two network bridges. It simplifies the process of setting up VXLAN tunnels for virtual network overlays.
+The Tunnel Manager is a Python script for managing VXLAN and GENEVE tunnels between bridges. It provides functionality for creating, cleaning up, validating, and listing tunnel interfaces.
 
 ## Features
 
-1. Create VXLAN tunnels between two bridges.
-2. Remove existing VXLAN tunnels.
-3. Support for both IPv4 and IPv6 addresses.
-4. Optional post-deployment connectivity validation.
-5. Basic error handling and logging.
+- Supports both VXLAN and GENEVE tunnel types.
+- Create and manage tunnel interfaces between bridges.
+- Validate connectivity between source and destination hosts.
+- List existing tunnel interfaces.
 
-## Requirements
+## Prerequisites
 
-- Python 2.7 (for Python 2 compatibility) or Python 3.6+
-- Linux-based operating system
-- `brctl` and `ip` command-line utilities
+Before using the Tunnel Manager, ensure you have the following prerequisites installed:
+
+- Python 3
+- Required Python packages (can be installed via pip):
+  - argparse
+  - logging
+  - socket
+  - subprocess
+  - sys
+  - yaml
+  - json
+  - csv
+  - xml.etree.ElementTree (standard library)
 
 ## Usage
 
-### Installation
-
-#### 1. Clone this repository or download the script.
-
 ```bash
-git clone https://github.com/yourusername/vxlan-management-script.git
-cd vxlan-management-script
+python tunnel_manager.py --action <action> [options]
 ```
 
-#### 2. Install any required Python packages (if needed).
+## Actions
+* create: Create a tunnel interface.
+* cleanup: Cleanup a tunnel interface.
+* validate: Validate connectivity between hosts.
+* list: List existing tunnel interfaces.
+
+## Options
+* --tunnel-type: Type of tunnel to create (default: vxlan).
+* --vni: Tunnel Network Identifier (VNI).
+* --src-host: Source host IP address.
+* --dst-host: Destination host IP address.
+* --bridge-name: Bridge name.
+* --src-port: Source port.
+* --dev: Parent interface for the tunnel.
+* --fields: Fields to display when listing tunnel interfaces (default: all).
+* --format: Output format for listing tunnel interfaces (default: table).
+* --action: Action to perform (create, cleanup, validate, or list tunnel interfaces).
+
+## Examples
+### Create a VXLAN tunnel interface:
 ```
-pip install -r requirements.txt
-python vxlan_manager.py [OPTIONS]
+python tunnel_manager.py --action create --tunnel-type vxlan --vni 100 --src-host 192.168.1.1 --dst-host 192.168.1.2 --bridge-name br0
 ```
 
-### Options:
-
-* --vni VNI: VXLAN VNI (required).
-* --src-host SRC_HOST: Source host IP address (required).
-* --dst-host DST_HOST: Destination host IP address (required).
-* --bridge-name BRIDGE_NAME: Bridge name to add VXLAN interface (required).
-* --src-port SRC_PORT: Source VXLAN UDP port (default: 4789).
-* --dst-port DST_PORT: Destination VXLAN UDP port (default: 4789).
-* --dev NETWORK_DEVICE: Network device to utilize (default: eth0).
-* --cleanup: Remove VXLAN tunnel instead of creating it (optional).
-* --validate-connectivity: Perform post-deployment connectivity validation (optional).
-* --bridge-tool TOOL: Bridge management tool to use either ip or brctl (default: ip).
-
-#### Examples
-* Create a VXLAN tunnel:
+### List existing tunnel interfaces in JSON format:
 ```
-python vxlan_manager.py --vni 1001 --src-host 192.168.1.1 --dst-host 192.168.1.2 --bridge-name br0
+python tunnel_manager.py --action list --format json
 ```
 
-* Create a VXLAN tunnel with custom ports:
-```
-python vxlan_manager.py --vni 1001 --src-host 192.168.1.1 --dst-host 192.168.1.2 --bridge-name br0 --src-port 5000 --dst-port 6000
-```
-* Remove an existing VXLAN tunnel:
-```
-python vxlan_manager.py --vni 1001 --bridge-name br0 --cleanup
-```
+## License
+This project is licensed under the GPL License - see the LICENSE file for details.
 
-**License
-This script is licensed under the GPL License. See the LICENSE file for details.**
-
+## Author
+Ofer Chen
