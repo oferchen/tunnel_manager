@@ -1,12 +1,13 @@
 import argparse
+import csv
+import json
 import logging
 import socket
 import subprocess
 import sys
-import yaml
-import json
-import csv
 from xml.etree import ElementTree
+
+import yaml
 
 # Configure logging with timestamps
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -85,7 +86,7 @@ class TunnelManager:
                 match = vxlan_regex.search(line)
                 if match:
                     details = match.groupdict()
-                    vxlan_details = {key: value for key, value in details.items()}
+                    vxlan_details = dict(details.items())
                     vxlan_data.append(vxlan_details)
         except subprocess.CalledProcessError as e:
             logger.error(f"Error collecting VXLAN tunnel data: {e}")
@@ -102,7 +103,7 @@ class TunnelManager:
                 match = geneve_regex.search(line)
                 if match:
                     details = match.groupdict()
-                    geneve_details = {key: value for key, value in details.items()}
+                    geneve_details = dict(details.items())
                     geneve_data.append(geneve_details)
         except subprocess.CalledProcessError as e:
             logger.error(f"Error collecting GENEVE tunnel data: {e}")
