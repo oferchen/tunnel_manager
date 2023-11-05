@@ -1,5 +1,32 @@
 # Tunnel Manager
 
+Tunnel Manager is a Python script for managing VXLAN and GENEVE tunnel interfaces between bridges.
+
+## Features
+
+- Create and manage VXLAN and GENEVE tunnel interfaces.
+- Validate connectivity between tunnel endpoints.
+- List all tunnel interfaces with various output formats.
+
+## Prerequisites
+
+Before using Tunnel Manager, ensure you have the following prerequisites installed and available on your system:
+
+- Python 3.x
+- The `ip` command-line tool (for creating and managing tunnel interfaces)
+- The `brctl` command-line tool (optional, for managing bridges)
+
+## Installation
+
+1. Clone this repository to your local machine:
+
+   ```bash
+   git clone https://github.com/yourusername/tunnel-manager.git
+   cd tunnel-manager
+   ```
+
+# Tunnel Manager
+
 The Tunnel Manager is a Python script for managing VXLAN and GENEVE tunnels between bridges. It provides functionality for creating, cleaning up, validating, and listing tunnel interfaces.
 
 ## Features
@@ -23,45 +50,65 @@ Before using the Tunnel Manager, ensure you have the following prerequisites ins
   - yaml
   - json
   - csv
+  - io
+  - re
+  - sys
+  - enum
+  - typing
   - xml.etree.ElementTree (standard library)
 
 ## Usage
 
 ```bash
-python tunnel_manager.py --action <action> [options]
+python tunnel_manager.py [OPTIONS] COMMAND [ARGS]...
+
+Options:
+  --tunnel-type [vxlan|geneve]
+                                  Type of tunnel to create (default: vxlan)
+  -h, --help                      Show this message and exit
+
+Commands:
+  create    Create a tunnel interface
+  cleanup   Cleanup a tunnel interface
+  validate  Validate connectivity of a tunnel interface
+  list      List all tunnel interfaces
+
 ```
 
 ## Actions
-* create: Create a tunnel interface.
-* cleanup: Cleanup a tunnel interface.
-* validate: Validate connectivity between hosts.
-* list: List existing tunnel interfaces.
 
-## Options
-* --tunnel-type: Type of tunnel to create (default: vxlan).
-* --vni: Tunnel Network Identifier (VNI).
-* --src-host: Source host IP address.
-* --dst-host: Destination host IP address.
-* --bridge-name: Bridge name.
-* --src-port: Source port.
-* --dev: Parent interface for the tunnel.
-* --fields: Fields to display when listing tunnel interfaces (default: all).
-* --format: Output format for listing tunnel interfaces (default: table).
-* --action: Action to perform (create, cleanup, validate, or list tunnel interfaces).
+*  create    Create a tunnel interface
+*  cleanup   Cleanup a tunnel interface
+*  validate  Validate connectivity of a tunnel interface
+*  list      List all tunnel interfaces
 
 ## Examples
-### Create a VXLAN tunnel interface:
+
+###Create a VXLAN tunnel interface:
 ```
-python tunnel_manager.py --action create --tunnel-type vxlan --vni 100 --src-host 192.168.1.1 --dst-host 192.168.1.2 --bridge-name br0
+python tunnel_manager.py --tunnel-type vxlan create --vni 100 --src-host 10.0.0.1 --dst-host 10.0.0.2 --bridge-name br0
 ```
 
-### List existing tunnel interfaces in JSON format:
+###Cleanup a VXLAN tunnel interface:
 ```
-python tunnel_manager.py --action list --format json
+python tunnel_manager.py --tunnel-type vxlan cleanup --vni 100 --bridge-name br0
 ```
 
-## License
-This project is licensed under the GPL License - see the LICENSE file for details.
+###Validate connectivity of a GENEVE tunnel interface:
+```
+python tunnel_manager.py --tunnel-type geneve validate --src-host 10.0.0.1 --dst-host 10.0.0.2 --vni 200 --port 6081
+```
+
+###List all tunnel interfaces in JSON format:
+```
+python tunnel_manager.py --tunnel-type vxlan list --format json
+```
+
+##Contributing
+Contributions are welcome! If you have suggestions, feature requests, or want to report issues, please create an issue or submit a pull request.
+
+##License
+This project is licensed under the GNU General Public License v3.0 - see the LICENSE file for details.
 
 ## Author
 Ofer Chen
