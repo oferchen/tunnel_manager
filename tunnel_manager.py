@@ -272,6 +272,7 @@ class TunnelManager:
 
 def main():
     parser = argparse.ArgumentParser(description="Manage VXLAN and GENEVE tunnels between bridges.")
+    parser.add_argument("--tunnel-type", type=TunnelType, choices=[tunnel_type.value for tunnel_type in TunnelType], default=TunnelType.VXLAN, help="Type of tunnel to create (default: %(default)s)")
     subparsers = parser.add_subparsers(dest='command', help='sub-command help')
 
     # Create the parser for the "create" command
@@ -283,13 +284,11 @@ def main():
     parser_create.add_argument("--src-port", type=int, help="Source port (optional)")
     parser_create.add_argument("--dst-port", type=int, help="Destination port (optional)")
     parser_create.add_argument("--dev", help="Device (optional)")
-    parser_create.add_argument("--tunnel-type", type=TunnelType, choices=[tunnel_type.value for tunnel_type in TunnelType], default=TunnelType.VXLAN, help="Type of tunnel to create (default: %(default)s)")
 
     # Create the parser for the "cleanup" command
     parser_cleanup = subparsers.add_parser('cleanup', help='cleanup a tunnel interface')
     parser_cleanup.add_argument("--vni", type=int, required=True, help="VNI (Virtual Network Identifier)")
     parser_cleanup.add_argument("--bridge-name", required=True, help="Bridge name associated with the tunnel interface")
-    parser_cleanup.add_argument("--tunnel-type", type=TunnelType, choices=[tunnel_type.value for tunnel_type in TunnelType], default=TunnelType.VXLAN, help="Type of tunnel to create (default: %(default)s)")
 
     # Create the parser for the "validate" command
     parser_validate = subparsers.add_parser('validate', help='validate connectivity of a tunnel interface')
@@ -302,7 +301,6 @@ def main():
 
     # Create the parser for the "list" command
     parser_list = subparsers.add_parser('list', help='list all tunnel interfaces')
-    parser_list.add_argument("--tunnel-type", type=TunnelType, choices=[tunnel_type.value for tunnel_type in TunnelType], default=TunnelType.VXLAN, help="Type of tunnel to create (default: %(default)s)")
     parser_list.add_argument("-fo", "--format", type=OutputFormatType, choices=[format_type.value for format_type in OutputFormatType], default=OutputFormatType.TABLE, help="Output format for listing tunnels (default: %(default)s)")
     parser_list.add_argument("-fi", "--fields", nargs="+", default="all", help="Fields to display for listing tunnel interfaces")
 
