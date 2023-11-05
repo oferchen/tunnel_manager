@@ -283,7 +283,7 @@ def main():
     parser_create.add_argument("--src-port", type=int, help="Source port (optional)")
     parser_create.add_argument("--dst-port", type=int, help="Destination port (optional)")
     parser_create.add_argument("--dev", help="Device (optional)")
-    parser.add_argument("--tunnel-type", type=TunnelType, choices=[tunnel_type.value for tunnel_type in TunnelType], default=TunnelType.VXLAN, help="Type of tunnel to create (default: %(default)s)")
+    parser_create.add_argument("--tunnel-type", type=TunnelType, choices=[tunnel_type.value for tunnel_type in TunnelType], default=TunnelType.VXLAN, help="Type of tunnel to create (default: %(default)s)")
 
     # Create the parser for the "cleanup" command
     parser_cleanup = subparsers.add_parser('cleanup', help='cleanup a tunnel interface')
