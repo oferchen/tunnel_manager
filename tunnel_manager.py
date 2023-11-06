@@ -282,9 +282,31 @@ class TunnelManager:
         raise ValueError(f"No method available for action: {action}")
 
 
+class CommandValidator(Protocol):
+    def check_command_existence(self, command: str) -> bool:
+        ...
+
+    def check_bridge_tool_existence(self, bridge_tool: str) -> None:
+        ...
+
+
+class SystemCommandValidator(CommandValidator):
+    def check_command_existence(self, command: str) -> bool:
+        try:
+            subprocess.check_call(["which", command], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+        return True
+
+    def check_bridge_tool_existence(self, bridge_tool: str) -> None:
+        if not self.check_command_existence(bridge_tool):
+            raise RuntimeError(f"Error: The bridge tool '{bridge_tool}' is not found. Please install it.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Manage VXLAN and GENEVE tunnels between bridges.")
     parser.add_argument("--tunnel-type", type=TunnelType, choices=[tunnel_type.value for tunnel_type in TunnelType], default=TunnelType.VXLAN.value, help="Type of tunnel to create (default: %(default)s)")
+    parser.add_argument("--bridge-tool", choices=["ip", "brctl"], default="ip", help="Bridge tool to use (default: %(default)s)")
     subparsers = parser.add_subparsers(dest="command", help="sub-command help")
 
     # Create the parser for the "create" command
@@ -316,8 +338,9 @@ def main() -> None:
     parser_list.add_argument("-fo", "--format", type=OutputFormatType, choices=[format_type.value for format_type in OutputFormatType], default=OutputFormatType.TABLE.value, help="Output format for listing tunnels (default: %(default)s)")
     parser_list.add_argument("-fi", "--fields", nargs="+", default="all", help="Fields to display for listing tunnel interfaces")
 
-    # Parse the arguments
     args = parser.parse_args()
+    command_validator = SystemCommandValidator()
+    command_validator.check_bridge_tool_existence(args.bridge_tool)
 
     try:
         tunnel = TunnelFactory.create_tunnel(args.tunnel_type)
