@@ -313,7 +313,7 @@ def main() -> None:
 
     # Create the parser for the "list" command
     parser_list = subparsers.add_parser("list", help="list all tunnel interfaces")
-    parser_list.add_argument("-fo", "--format", type=OutputFormatType, choices=[format_type.value for format_type in OutputFormatType], default=OutputFormatType.TABLE, help="Output format for listing tunnels (default: %(default)s)")
+    parser_list.add_argument("-fo", "--format", type=OutputFormatType, choices=[format_type.value for format_type in OutputFormatType], default=OutputFormatType.TABLE.value, help="Output format for listing tunnels (default: %(default)s)")
     parser_list.add_argument("-fi", "--fields", nargs="+", default="all", help="Fields to display for listing tunnel interfaces")
 
     # Parse the arguments
