@@ -292,11 +292,7 @@ class CommandValidator(Protocol):
 
 class SystemCommandValidator(CommandValidator):
     def check_command_existence(self, command: str) -> bool:
-        try:
-            subprocess.check_call(["which", command], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            return False
-        return True
+        return subprocess.which(command) is not None
 
     def check_bridge_tool_existence(self, bridge_tool: str) -> None:
         if not self.check_command_existence(bridge_tool):
