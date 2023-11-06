@@ -284,7 +284,7 @@ class TunnelManager:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Manage VXLAN and GENEVE tunnels between bridges.")
-    parser.add_argument("--tunnel-type", type=TunnelType, choices=[tunnel_type.value for tunnel_type in TunnelType], default=TunnelType.VXLAN, help="Type of tunnel to create (default: %(default)s)")
+    parser.add_argument("--tunnel-type", type=TunnelType, choices=[tunnel_type.value for tunnel_type in TunnelType], default=TunnelType.VXLAN.value, help="Type of tunnel to create (default: %(default)s)")
     subparsers = parser.add_subparsers(dest="command", help="sub-command help")
 
     # Create the parser for the "create" command
