@@ -43,19 +43,18 @@ Before using the Tunnel Manager, ensure you have the following prerequisites ins
 - Python 3
 - Required Python packages (can be installed via pip):
   - argparse
-  - logging
-  - socket
-  - subprocess
-  - sys
-  - yaml
-  - json
   - csv
   - io
+  - json
+  - logging
   - re
+  - socket
+  - subprocess
   - sys
   - enum
   - typing
   - xml.etree.ElementTree (standard library)
+  - yaml
 
 ## Usage
 
