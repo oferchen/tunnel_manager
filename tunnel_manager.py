@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -292,7 +293,7 @@ class CommandValidator(Protocol):
 
 class SystemCommandValidator(CommandValidator):
     def check_command_existence(self, command: str) -> bool:
-        return subprocess.which(command) is not None
+        return shutil.which(command) is not None
 
     def check_bridge_tool_existence(self, bridge_tool: str) -> None:
         if not self.check_command_existence(bridge_tool):
