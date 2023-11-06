@@ -48,6 +48,7 @@ Before using the Tunnel Manager, ensure you have the following prerequisites ins
   - json
   - logging
   - re
+  - shutil
   - socket
   - subprocess
   - sys
