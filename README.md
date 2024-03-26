@@ -1,6 +1,6 @@
 # Tunnel Manager
 
-Tunnel Manager is a Python script for managing VXLAN and GENEVE tunnel interfaces between bridges.
+Tunnel Manager is a Python/Golang script for managing VXLAN and GENEVE tunnel interfaces between bridges.
 
 ## Features
 
