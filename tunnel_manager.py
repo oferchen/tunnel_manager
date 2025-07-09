@@ -102,20 +102,24 @@ class VXLANTunnel(TunnelInterface):
         bridge_name: str,
         src_port: Optional[int] = None,
         dst_port: Optional[int] = None,
-        dev: Optional[str] = "eth0"
+        dev: Optional[str] = None
     ) -> None:
         src_port = src_port or self.DEFAULT_PORT
         dst_port = dst_port or self.DEFAULT_PORT
 
         try:
-            cmd = (
+            builder = (
                 CommandBuilder()
                 .add("ip", "link", "add", f"vxlan{vni}", "type", "vxlan")
                 .add("id", str(vni), "local", src_host, "remote", dst_host)
-                .add("dev", dev)
                 .add("dstport", str(dst_port))
-                .build()
             )
+
+            if dev:
+                builder.add("dev", dev)
+
+            cmd = builder.build()
+
             subprocess.run(cmd, check=True)
             subprocess.run(["ip", "link", "set", f"vxlan{vni}", "up"], check=True)
             subprocess.run(["ip", "link", "set", f"vxlan{vni}", "master", bridge_name], check=True)
@@ -162,13 +166,45 @@ class VXLANTunnel(TunnelInterface):
     def collect_tunnel_data(self) -> List[Dict[str, Any]]:
         vxlan_data = []
         try:
-            result = subprocess.run(["ip", "-d", "link", "show", "type", "vxlan"], stdout=subprocess.PIPE, text=True)
-            vxlan_regex = re.compile(rf"\b(?P<ifname>\S+): .+ \bvxlan\b id (?P<vni>\d+) .+ local (?P<src_host>{IP_PATTERN}) remote (?P<dst_host>{IP_PATTERN}) .+ dstport (?P<dst_port>\d+)")
-            for line in result.stdout.splitlines():
-                if match := vxlan_regex.search(line):
-                    vxlan_data.append(match.groupdict())
+            result = subprocess.run(["ip", "-d", "link", "show", "type", "vxlan"],
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+
+            lines = result.stdout.splitlines()
+            current: Dict[str, Any] = {}
+
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+
+                if re.match(r"^\d+:\s+\S+: <", line):
+                    if current:
+                        vxlan_data.append(current)
+                        current = {}
+                    ifname = line.split(":")[1].strip()
+                    current["ifname"] = ifname
+
+                elif "vxlan id" in line:
+                    id_match = re.search(r"vxlan id\s+(\d+)", line)
+                    remote_match = re.search(r"remote\s+(" + IP_PATTERN + ")", line)
+                    local_match = re.search(r"local\s+(" + IP_PATTERN + ")", line)
+                    dstport_match = re.search(r"dstport\s+(\d+)", line)
+
+                    if id_match:
+                        current["vni"] = id_match.group(1)
+                    if remote_match:
+                        current["dst_host"] = remote_match.group(1)
+                    if local_match:
+                        current["src_host"] = local_match.group(1)
+                    if dstport_match:
+                        current["dst_port"] = dstport_match.group(1)
+
+            if current:
+                vxlan_data.append(current)
+
         except subprocess.CalledProcessError as e:
             logger.error(f"Error collecting VXLAN tunnel data: {e}")
+
         return vxlan_data
 
 # Geneve-specific tunnel
@@ -326,13 +362,21 @@ class TableFormatter(OutputFormatterStrategy):
     def format(self, data: Any) -> str:
         if not data:
             return ""
+
         headers = list(data[0].keys())
-        table = " | ".join(headers) + "\n"
-        table += "-+-".join(["-" * len(header) for header in headers]) + "\n"
-        for item in data:
-            row = " | ".join(str(item.get(header, "")) for header in headers)
-            table += row + "\n"
-        return table
+        col_widths = {
+            h: max(len(h), max(len(str(row.get(h, ""))) for row in data))
+            for h in headers
+        }
+
+        def format_row(row: Dict[str, Any]) -> str:
+            return " | ".join(f"{str(row.get(h, '')).center(col_widths[h])}" for h in headers)
+
+        header_line = " | ".join(h.center(col_widths[h]) for h in headers)
+        separator = "-+-".join("-" * col_widths[h] for h in headers)
+        rows = [format_row(row) for row in data]
+
+        return "\n".join([header_line, separator] + rows)
 
 
 class OutputFormatterFactory:
